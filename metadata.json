@@ -1,0 +1,11 @@
+{
+  "name": "Oistarian-NEXUS-ONE app",
+  "description": "A hyper-advanced, AI-powered ecosystem for creators, entrepreneurs, and innovators. Fuses AI intelligence, automation, marketing, navigation, and business management into a single command center.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
