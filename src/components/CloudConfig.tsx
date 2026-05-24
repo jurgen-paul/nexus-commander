@@ -496,7 +496,7 @@ export const CloudConfig = () => {
                     key={repo.id}
                     onClick={() => setSelectedRepo(repo)}
                     className={cn(
-                      "w-full text-left p-4 rounded-xl border transition-all space-y-2.5",
+                      "github-repo-card w-full text-left p-4 rounded-xl border transition-all space-y-2.5",
                       selectedRepo?.id === repo.id 
                         ? "bg-nexus-accent/10 border-nexus-accent/30 shadow-[0_4px_20px_rgba(5,255,161,0.05)]" 
                         : "bg-white/5 border-transparent hover:border-white/10"
@@ -506,6 +506,10 @@ export const CloudConfig = () => {
                       <div className="flex items-center gap-2 min-w-0">
                         <Github className={cn("w-3 h-3 shrink-0", selectedRepo?.id === repo.id ? "text-nexus-accent" : "text-nexus-text-dim")} />
                         <span className="text-xs font-bold text-white truncate uppercase">{repo.name.split("/")[1] || repo.name}</span>
+                        <span className="flex items-center gap-0.5 text-[8px] font-mono font-black text-nexus-text-dim px-1 py-0.5 rounded bg-white/5 border border-white/10 shrink-0 uppercase">
+                          <GitBranch className="w-2.5 h-2.5 text-nexus-accent/80" />
+                          {repo.branch}
+                        </span>
                       </div>
                       <div className={cn(
                         "w-1.5 h-1.5 rounded-full shrink-0",
