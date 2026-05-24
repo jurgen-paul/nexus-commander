@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net: Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Reusable Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 2. Validation Blueprints (Anti-Update-Gap)
+    function isValidUserProfile(data) {
+      return (
+        data.keys().hasAll(['userId', 'alias', 'email', 'rank', 'accessLevel']) &&
+        data.keys().size() <= 8 && // Allows optional avatar and theme
+        data.userId is string &&
+        data.userId.size() <= 128 &&
+        data.userId == request.auth.uid && // Identity Integrity
+        data.alias is string &&
+        data.alias.size() >= 1 &&
+        data.alias.size() <= 100 &&
+        data.email is string &&
+        data.email.size() <= 256 &&
+        data.rank is string &&
+        data.rank.size() <= 100 &&
+        data.accessLevel is string &&
+        data.accessLevel.size() <= 100 &&
+        (!data.keys().hasAny(['theme']) || (data.theme is string && data.theme.size() <= 50)) &&
+        (!data.keys().hasAny(['avatar']) || (data.avatar is string && data.avatar.size() <= 1000))
+      );
+    }
+
+    // Match rules for user_profiles/{userId}
+    match /user_profiles/{userId} {
+      // Direct Single-Document Get Access: Locked to self
+      allow get: if isSignedIn() && userId == request.auth.uid;
+
+      // Unauthenticated list or search queries are strictly denied
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Creation: Requires verified email, id poisoning safeguard, strict schema match
+      allow create: if isVerified() && 
+                      isValidId(userId) && 
+                      userId == request.auth.uid && 
+                      isValidUserProfile(incoming());
+
+      // Update: Tiered updating & Immutable checks to protect key fields
+      allow update: if isVerified() && 
+                      isValidId(userId) && 
+                      userId == request.auth.uid && 
+                      isValidUserProfile(incoming()) &&
+                      incoming().userId == existing().userId && // Immutable field check
+                      incoming().email == existing().email; // Immutable email check
+
+      // Deletion: Strict ownership match
+      allow delete: if isSignedIn() && userId == request.auth.uid;
+    }
+  }
+}

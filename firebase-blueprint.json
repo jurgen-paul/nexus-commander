@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile state and configuration variables.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The unique identifier of the authenticated user"
+        },
+        "alias": {
+          "type": "string",
+          "description": "The custom user alias or nickname"
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's contact email address"
+        },
+        "rank": {
+          "type": "string",
+          "description": "The assigned system operator rank"
+        },
+        "accessLevel": {
+          "type": "string",
+          "description": "The clearance or access level of the operator"
+        },
+        "theme": {
+          "type": "string",
+          "description": "The background active theme preference"
+        },
+        "avatar": {
+          "type": "string",
+          "description": "Avatar image URL or path"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when configuration was last updated in Firestore"
+        }
+      },
+      "required": ["userId", "alias", "email", "rank", "accessLevel"]
+    }
+  },
+  "firestore": {
+    "/user_profiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "Exhaustive user profile data and customized operators dashboard configurations."
+    }
+  }
+}

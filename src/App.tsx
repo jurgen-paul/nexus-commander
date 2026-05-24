@@ -20,12 +20,19 @@ import {
   Hash,
   Activity,
   ArrowRight,
-  User,
+  User as UserIcon,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  Database,
+  CloudLightning,
+  UserCheck,
+  Cloud
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppSettings } from './components/AppSettings';
+import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Design Theme Presets matching design guidelines:
 // Theme 1: Warm Organic (Crafted serif, soft earth tones)
@@ -87,6 +94,133 @@ export default function App() {
   const [accessLevel, setAccessLevel] = useState<string>(() => {
     return localStorage.getItem('applet_access_level') || 'ULTRA-VIOLET';
   });
+
+  // Firebase auth & cloud sync parameters
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [lastSynced, setLastSynced] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      if (user) {
+        setIsSyncing(true);
+        try {
+          const docRef = doc(db, 'user_profiles', user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.alias) {
+              setAlias(data.alias);
+              localStorage.setItem('applet_alias', data.alias);
+            }
+            if (data.email) {
+              setEmail(data.email);
+              localStorage.setItem('applet_email', data.email);
+            }
+            if (data.rank) {
+              setRank(data.rank);
+              localStorage.setItem('applet_rank', data.rank);
+            }
+            if (data.accessLevel) {
+              setAccessLevel(data.accessLevel);
+              localStorage.setItem('applet_access_level', data.accessLevel);
+            }
+            if (data.theme) {
+              setTheme(data.theme as ThemeId);
+              localStorage.setItem('applet_theme', data.theme);
+            }
+            if (data.avatar) {
+              setAvatar(data.avatar);
+              localStorage.setItem('applet_avatar', data.avatar);
+            }
+            setLastSynced(new Date().toLocaleTimeString());
+          } else {
+            // First time login - seed local profile data to Firestore
+            const seedAlias = localStorage.getItem('applet_alias') || 'COMMANDER';
+            const seedEmail = user.email || localStorage.getItem('applet_email') || 'commander@nexus.one';
+            const seedRank = localStorage.getItem('applet_rank') || 'System Architect / Lead';
+            const seedAccess = localStorage.getItem('applet_access_level') || 'ULTRA-VIOLET';
+            const seedTheme = localStorage.getItem('applet_theme') || 'warm';
+            const seedAvatar = user.photoURL || localStorage.getItem('applet_avatar') || 'https://picsum.photos/seed/commander/120/120';
+
+            const profileData = {
+              userId: user.uid,
+              alias: seedAlias,
+              email: seedEmail,
+              rank: seedRank,
+              accessLevel: seedAccess,
+              theme: seedTheme,
+              avatar: seedAvatar,
+              updatedAt: new Date().toISOString()
+            };
+            await setDoc(docRef, profileData);
+            setLastSynced(new Date().toLocaleTimeString());
+          }
+        } catch (error) {
+          console.error("Cloud synchronization failed during auth change:", error);
+        } finally {
+          setIsSyncing(false);
+        }
+      } else {
+        setLastSynced(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      setIsSyncing(true);
+      await signInWithPopup(auth, provider);
+    } catch (error) {
+      console.error("Google authenticated popup login failed:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      setIsSyncing(true);
+      await signOut(auth);
+    } catch (error) {
+      console.error("Firebase authentications exit request failed:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const cloudCommitProfile = async (newAlias: string, newEmail: string, newRank: string, newAccess: string, newAvatarUrl: string) => {
+    if (!auth.currentUser) return;
+    setIsSyncing(true);
+    try {
+      const docRef = doc(db, 'user_profiles', auth.currentUser.uid);
+      const profileData = {
+        userId: auth.currentUser.uid,
+        alias: newAlias,
+        email: newEmail,
+        rank: newRank,
+        accessLevel: newAccess,
+        theme: theme,
+        avatar: newAvatarUrl,
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(docRef, profileData);
+      setLastSynced(new Date().toLocaleTimeString());
+    } catch (error) {
+      console.error("Failed to commit settings to Firebase Firestore:", error);
+      try {
+        handleFirestoreError(error, OperationType.WRITE, `user_profiles/${auth.currentUser.uid}`);
+      } catch (err) {
+        // caught
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Persistence state
   const [description, setDescription] = useState<string>(() => {
@@ -341,6 +475,20 @@ export default function App() {
             <span className={`text-[10px] tracking-widest uppercase font-semibold px-2 py-0.5 rounded ${theme === 'technical' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-stone-200 text-stone-700'}`}>
               [ SERVER OK ]
             </span>
+            {firebaseUser ? (
+              <span className={`text-[10px] tracking-widest uppercase font-semibold px-2 py-0.5 rounded flex items-center gap-1.5 ${
+                isSyncing 
+                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' 
+                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isSyncing ? 'bg-blue-400 animate-ping' : 'bg-emerald-400'}`} />
+                [ CLOUD SYNCED ]
+              </span>
+            ) : (
+              <span className="text-[10px] tracking-widest uppercase font-semibold px-2 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20 font-mono">
+                [ OFFLINE ]
+              </span>
+            )}
             <button 
               onClick={() => setCurrentView('desk')}
               className={`text-xs opacity-80 flex items-center gap-1 font-mono hover:text-indigo-500 transition-colors uppercase ${currentView === 'desk' ? 'font-bold' : ''}`}
@@ -466,6 +614,12 @@ export default function App() {
             setAccessLevel={setAccessLevel}
             theme={theme}
             onBack={() => setCurrentView('desk')}
+            firebaseUser={firebaseUser}
+            isSyncing={isSyncing}
+            lastSynced={lastSynced}
+            onGoogleSignIn={handleGoogleSignIn}
+            onSignOut={handleSignOut}
+            onCloudCommitProfile={cloudCommitProfile}
           />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
